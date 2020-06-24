@@ -35,8 +35,8 @@ covid <- covid_data %>% filter(result == 1, betterdate < "2020-04-27", yearBorn 
 covid_age <- table(covid$yearBorn)
 
 # As an age control we will only look at individuals born within the same time as the COVID patients for our non AD patients
-all_data <- subset(all_data, all_data$yearBorn < max(covid$yearBorn))
-all_data <- subset(all_data, all_data$yearBorn > min(covid$yearBorn))
+all_data <- subset(all_data, all_data$yearBorn <= max(covid$yearBorn))
+all_data <- subset(all_data, all_data$yearBorn >= min(covid$yearBorn))
 
 #Get non COVID patients
 no_covid_initial <- all_data[!all_data$ids %in% covid$ids,]
@@ -49,10 +49,11 @@ no_covid <- data.frame(matrix(ncol = ncol(no_covid_initial), nrow = 0))
 colnames(no_covid) <- colnames(no_covid_initial)
 for (i in 1:length(covid_age)) {
   temp <- covid_age[i]
-  age_check <- as.numeric(names(temp))
-  number_cases <- as.numeric(unname(temp))
-  possible_controls <- no_covid_initial[no_covid_initial$yearBorn == age_check,]
-  no_covid <- rbind(no_covid, possible_controls[sample(nrow(possible_controls), number_cases, replace = TRUE), ])
+  age_check <- as.integer(names(temp))
+  number_cases <- as.integer(unname(temp))
+#  possible_controls <- no_covid_initial[no_covid_initial$yearBorn == age_check,]
+  possible_controls <- no_covid_initial %>% filter(yearBorn == age_check)
+    no_covid <- rbind(no_covid, possible_controls[sample(nrow(possible_controls), number_cases, replace = FALSE), ])
 }
 
 # make sure we aren't including two copies of anyone here:
@@ -63,7 +64,7 @@ ind <- sample(c(TRUE, FALSE), nrow(covid), replace=TRUE, prob=c(0.7, 0.3)) # Ran
 train <- covid[ind, ]
 validate <- covid[!ind, ]
 
-#Remove unnecessary rows
+#Remove unnecessary columns
 train <- train[,!names(train) %in% c("datereported", "specdate", "spectype", "laboratory", "origin","betterdate")]
 validate <- validate[,!names(validate) %in% c( "datereported", "specdate", "spectype", "laboratory", "origin","betterdate")]
 
@@ -93,11 +94,11 @@ validate <- validate[,!names(validate) %in% c( "ids")]
 
 
 # Free up data 
-rm(no_covid, covid, controls, train_controls, validate_controls)
-rm(covid_results, condensed, my_ukb_data_cancer, my_data_age, all_data)
+# rm(no_covid, covid, controls, train_controls, validate_controls)
+# rm(covid_results, condensed, my_ukb_data_cancer, my_data_age, all_data)
 
 # Load h2o
-h2o.init(nthreads=15)
+h2o.init(nthreads=5)
 
 # Load data into h2o
 train.hex <- as.h2o(train, destination_frame = "train.hex")  
