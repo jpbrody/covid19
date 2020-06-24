@@ -69,7 +69,7 @@ train <- train[,!names(train) %in% c("datereported", "specdate", "spectype", "la
 validate <- validate[,!names(validate) %in% c( "datereported", "specdate", "spectype", "laboratory", "origin","betterdate")]
 
 
-controls <- no_covid[sample(nrow(no_covid), nrow(covid), replace = TRUE), ] # Randomly get controls
+controls <- no_covid[sample(nrow(no_covid), nrow(covid), replace = FALSE), ] # Randomly get controls
 controls['result'] = 0
 controls <- controls %>% distinct(ids,.keep_all = TRUE)
 
@@ -88,7 +88,7 @@ validate$result <- as.logical(validate$result)
 train$result <- as.factor(train$result)
 validate$result <- as.factor(validate$result)
 
-#Remove unnecessary rows
+#Remove unnecessary columns
 train <- train[,!names(train) %in% c("ids")]
 validate <- validate[,!names(validate) %in% c( "ids")]
 
@@ -116,19 +116,30 @@ response <- "result"
 predictors <- colnames(train)
 predictors <- predictors[! predictors %in% response] #Response cannot be a predictor
 predictors <- predictors[! predictors %in% "yearBorn"] #Remove yearBorn as predictor
-model <- h2o.automl(x = predictors,
-                    y = response,
-                    training_frame = train.hex,
-                    validation_frame = validate.hex,
-                    nfolds=5,
-                    max_runtime_secs = 360)
+#model <- h2o.automl(x = predictors,
+#                    y = response,
+#                    training_frame = train.hex,
+#                    validation_frame = validate.hex,
+#                    nfolds=5,
+#                    max_runtime_secs = 3600)
 
+model <- h2o.xgboost(x = predictors,
+                           y = response,
+                           training_frame = train.hex,
+                           validation_frame = ,
+                           nfolds = 5,
+                           booster = "dart",
+                           normalize_type = "tree",
+                           seed = 1234)
+
+
+#  Got rid of the automl and just went with xgboost, since it was always the best
 #record the Leading model AUC in the dataset
-leader <- model@leader
-auc=h2o.auc(leader, train=FALSE, xval=TRUE)
+# leader <- model@leader
+auc=h2o.auc(model, train=FALSE, xval=TRUE)
 
 # plot out the ROC.  We type out the tissue and AUC at the top of the ROC.
-plot(h2o.performance(leader,train=FALSE, xval=TRUE),type='roc',main=paste("COVID Cross-Validated 4 Splits",auc))
+plot(h2o.performance(model,train=FALSE, xval=TRUE),type='roc',main=paste("COVID Cross-Validated 4 Splits",auc))
 
 # Print performance info of leader
 leader@algorithm
