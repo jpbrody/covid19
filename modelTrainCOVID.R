@@ -25,10 +25,11 @@ my_data_age <- select(my_ukb_data_cancer, eid, yearBorn = year_of_birth_f34_0_0)
 # keep the results in aucframe
 
 repeatlength<-100
-aucvector<-numeric()
+aucframe<-data.frame(repeatnum=integer(), birthyear=integer(),  auc=double())
 
-
-for (repeatnumber in 1:repeatlength)
+for( loweryear in c(1930,1940,1950,1960))
+{
+  for (repeatnumber in 1:repeatlength)
 {
 repeatnumber
 # Merge with CNV data
@@ -41,7 +42,7 @@ covid_data <- merge(all_data, covid_results, by.x = "ids", by.y = "eid")
 # covid <- covid_data[covid_data$result == 1,]
 #
 #   added this line to filter based on results, date, and only keep one per patient.
-covid <- covid_data %>% filter(result == 1, betterdate < "2020-04-27", yearBorn > 1950) %>% distinct(ids, .keep_all=TRUE)
+covid <- covid_data %>% filter(result == 1, betterdate < "2020-04-27", yearBorn > loweryear) %>% distinct(ids, .keep_all=TRUE)
 
 # Get breakdown of COVID patients' age
 covid_age <- table(covid$yearBorn)
@@ -154,6 +155,7 @@ auc=h2o.auc(model, train=FALSE, xval=TRUE)
 plot(h2o.performance(model,train=FALSE, xval=TRUE),type='roc',main=paste("COVID Cross-Validated 4 Splits",auc))
 
 h2o.shutdown(prompt = FALSE)
-aucvector<-c(aucvector,auc)
-auc
+aucframe<-  aucframe %>% add_row(repeatnum=repeatnumber, birthyear=loweryear,  auc=auc)
+
+  }
 }
