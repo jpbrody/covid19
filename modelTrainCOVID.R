@@ -1,6 +1,9 @@
 library(h2o)
 library(ukbtools)
 library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(rstatix)
 
 ## Create training and validation frames
 condensed <- read.csv("/data/ukbiobank/ukb_l2r_ids_allchr_condensed_4splits.txt", sep = " ")
@@ -37,7 +40,7 @@ all_data <- merge(condensed, my_data_age, by.x = "ids", by.y = "eid")
 
 # Get COVID patients
 covid_data <- merge(all_data, covid_results, by.x = "ids", by.y = "eid")
-
+ids
 #  Replaced this line with the filter /distinct below
 # covid <- covid_data[covid_data$result == 1,]
 #
@@ -106,12 +109,16 @@ train <- train[,!names(train) %in% c("ids")]
 validate <- validate[,!names(validate) %in% c( "ids")]
 
 
+# this is for the random control
+train$result<-sample(train$result)
+
+
 # Free up data 
 # rm(no_covid, covid, controls, train_controls, validate_controls)
 # rm(covid_results, condensed, my_ukb_data_cancer, my_data_age, all_data)
 
 # Load h2o
-h2o.init(nthreads=5)
+h2o.init(nthreads=5,strict_version_check = FALSE)
 
 # Load data into h2o
 train.hex <- as.h2o(train, destination_frame = "train.hex")  
@@ -159,3 +166,80 @@ aucframe<-  aucframe %>% add_row(repeatnum=repeatnumber, birthyear=loweryear,  a
 
   }
 }
+
+
+#  June 27, 2020
+#  Notes.  I had some problems getting this to run to completion because of h2o issues.
+#  Short version.  I ran the above code to generate dataframe. Saved the dataframe. 
+#  This dataframe should contain 100 repetions with three cohorts (1930,1940,1950) 
+#  each cohort contains everyone born after that year. I think I had a 1960 cohort, but h2o kept crashing.
+#  
+#  Then I added line 112 to randomize and I ran it again.  Saved the dataframe.
+#  
+#  I don't use the validation frame, just throwing away 20% of the data.  I should fix that.
+#
+# Once I have the two dataframes I do some plots/statistics below.
+#
+# I ran these lines in the console:
+# > testframe<- aucframerando %>% mutate(dataorigin=paste(birthyear," random"))
+# > testrealframe <- aucframegood %>% mutate(dataorigin=paste(birthyear," data"))
+# > finaldata<-rbind(testframe,testrealframe)
+#
+#
+#  Then, this plots the graph I use:
+# > p <- ggboxplot(finaldata, x = "birthyear", y = "auc", add="jitter", color="dataorigin")
+# > p
+
+
+# Table to compare data/randomdata
+#
+stat.test <- finaldata %>%
+  group_by(birthyear) %>%
+  t_test(auc ~ dataorigin) %>%
+  adjust_pvalue(method = "BH") %>%
+  add_significance()
+stat.test
+
+#
+# make vectors for t.tests
+#
+rand30<-finaldata %>% filter(dataorigin == "1930  random") 
+rand40<-finaldata %>% filter(dataorigin == "1940  random") 
+rand50<-finaldata %>% filter(dataorigin == "1950  random") 
+data30<-finaldata %>% filter(dataorigin == "1930  data") 
+data40<-finaldata %>% filter(dataorigin == "1940  data") 
+data50<-finaldata %>% filter(dataorigin == "1950  data") 
+t.test(rand30$auc,mu=0.5)
+t.test(rand40$auc,mu=0.5)
+t.test(rand50$auc,mu=0.5)
+t.test(data30$auc,mu=0.5)
+t.test(data40$auc,mu=0.5)
+t.test(data50$auc,mu=0.5)
+
+
+#
+# Get a nice dataframe with patient numbers for statistics.
+#
+covidpaper <- covid_data %>% filter(result == 1, betterdate < "2020-04-27") %>% distinct(ids, .keep_all=TRUE) %>% select(ids,yearBorn,specdate,spectype,laboratory,origin,result,betterdate)
+
+
+
+#saveRDS(aucframe,file="aucframerando6-26")
+aucframerando<-readRDS(file="aucframerando6-26")
+aucframegood<-readRDS(file="aucframe.RDS")
+
+aucframe %>% 
+  group_by(birthyear) %>% 
+  summarise(meanauc=mean(auc),sdauc=sd(auc))
+
+p <- ggboxplot(aucframegood, x = "birthyear", y = "auc", add="jitter")
+p + stat_compare_means(method = "t.test")
+
+p <- ggboxplot(aucframerando, x = "birthyear", y = "auc", add="jitter")
+p + stat_compare_means(method = "t.test")
+
+
+p <- ggboxplot(finaldata, x = "birthyear", y = "auc", add="jitter", color="dataorigin")
+p
+
+
