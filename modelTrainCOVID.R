@@ -242,4 +242,4 @@ p + stat_compare_means(method = "t.test")
 p <- ggboxplot(finaldata, x = "birthyear", y = "auc", add="jitter", color="dataorigin")
 p
 
-
+#done
